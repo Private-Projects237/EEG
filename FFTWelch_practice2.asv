@@ -1,0 +1,97 @@
+% 1. Set pathway to general functions
+EEGFUN_Path = 'C:\Users\lledesma.TIMES\Documents\GitHub\EEG\generalfun';
+addpath(EEGFUN_Path)
+
+% Set parameters
+nbchan = 10;
+trials = 10;
+srate = 100;
+trialsec = 10;
+sinnum = 25;
+noise = 2;
+seed = 212;
+
+% Use custom made function to create a signal - Part 2
+newsig_info = creatSig2(nbchan, trials ,srate, trialsec, sinnum, noise, seed)
+
+% Plot the created signal
+plot_CreatSig2(newsig_info,1,30)
+
+% run fftx2
+fftx_info = fftx2(newsig_info.data, srate, 'filename_001')
+
+% plot fftx2 results
+plot_fftx2(fftx_info, 1, 40)
+
+% run welchx2
+welch_info = welchx2(newsig_info.data, srate, 2, 50, 'filename_001')
+
+% plot welchx2
+plot_welchx2(welch_info, 1, 40)
+
+
+% Obtain the .set file names
+inputdir = 'Y:\STUDY 1\All EEG Files Organized\Preprocessed_RAW\RAW_eyes_open_and_eyes_closed_cleaned\';  
+setfiles = dir(fullfile(inputdir, '*.set'));  
+filenames = {setfiles.name};  
+filenames = filenames(1:5);
+
+% Set directory to save files/structs
+outputdir = 'Y:\STUDY 1\All EEG Files Organized\Preprocessed_RAW\CSV_eyes open and eyes closed FFT\';
+
+% Identify files that have a struct completed
+structfiles = dir(fullfile(outputdir, '*RAW_struct_fftx2.mat'));  
+structsprocessed = {structfiles.name}; 
+
+% Remove filenames from loop iteration if they have a struct saved
+filesprocessed = strrep(structsprocessed, "_struct.mat", ".set");
+filenames = filenames(~ismember(filenames, filesprocessed));
+
+% Set up the frequency bands of interest and their Hz range
+bands = {'delta', 'theta', 'alpha', 'beta'};  
+frexvc = [1, 4; 4, 8; 8, 13; 13, 30];  % [start, end] Hz for each band
+
+% Run FBpowfftx- will create structs with fftx2 output for all files
+FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
+
+
+
+% Test
+
+
+afftx_info(2).powavg
+meanPowAvg = mean(cat(3, afftx_info.powavg), 3) % looks promising
+
+
+mean(fftx_info(1).powavg,1)
+
+size(fftx_info(1).powavg)
+
+afftx_info(1).hz'
+
+
+
+
+% Investigate the variance of power dynamically and save results
+    for bandIdx = 1:length(bands)
+        bandName = bands{bandIdx};
+        bandAvgValues = [afftx.(sprintf('avg%s', bandName))];
+        varianceValue = var(bandAvgValues);
+        fprintf('Variance of %s: %.4f\n', bandName, varianceValue);
+        
+    end
+
+    % View spread with histograms dynamically and save them
+    for bandIdx = 1:length(bands)
+        bandName = bands{bandIdx};
+        figure;
+        histogram([afftx.(sprintf('avg%s', bandName))], 15);
+        xlabel(sprintf('Average %s Power', bandName));
+        ylabel('Frequency');
+        title(sprintf('Histogram of Average %s Power', bandName));
+        
+        % Save the histogram figure
+        %saveHistFile = fullfile(outputDir, sprintf('%s_histogram.png', bandName));
+        %saveas(gcf, saveHistFile);
+        %close(gcf);  % Close the figure to avoid memory overload
+    end
