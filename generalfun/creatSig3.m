@@ -10,7 +10,7 @@
 % srate: desired sampling rate
 % sigL: desired signal length for a trial (sec)
 % trialNum: desired num of trials
-% transf_sec: Seconds until signal drastically changes
+% transf_sec: .25 is the best (.5 also works)
 % sinNum: desired number of unique frequencies
 % noise: desired noise in signal
 % fig: ("Yes"/"No")
@@ -67,16 +67,17 @@ function [NonStatSiginfo] = creatSig3(chanNum, srate, sigL, trialNum, transf_sec
         end
     
         % Create the signal with mean shift and phase shift
-        newSig(1,:, ci) = ampl(ci) * sin(2*pi*frex(ci)*t_chunk + randPhase) + offset;
-    
+        signal = ampl(ci) * sin(2*pi*frex(ci)*t_chunk + randPhase) + offset;
+
+        % Add unique noise for each trial and save
+        newSig(1,:, ci) = signal + noise^2*randn(size(signal));
+
         % Apply taper every 3rd iteration
         if mod(ci, 3) == 0
             newSig(1,:, ci) = newSig(1,:, ci) .* hann(length(t_chunk))';
         end
     
     end
-
-
 
     
     % Concatenate the trials
@@ -143,7 +144,7 @@ function [NonStatSiginfo] = creatSig3(chanNum, srate, sigL, trialNum, transf_sec
         % Plot the first two seconds
         subplot(3,1,2) % Middle-half
         plot(t,mean(newSigl(chanNum,:,:),3))
-        set(gca, 'xlim', [1 2])
+        set(gca, 'xlim', [1 3])
         xlabel('Time (sec)')
         ylabel('Amplitude')
         title(['Trial Averaged EEG Signal Ossilcation (2 seconds)'])

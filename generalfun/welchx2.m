@@ -1,22 +1,30 @@
-% Reports the:
-% 1) Welch Hz  
-% 2) Amplitude (correct units)
-% 3) Power (correct units)
-% 4) Number of Time Windows
-% 5) Window length chosen
+% INPUT
+% signal: a sinusoid matrix (3D)
+% srate: sampling rate (scalar)
+% winsec: time down length in seconds (0.5-2)
+% nOverlap_per: percentage of time window overlap (50)
 %
-% signal: A 3D Matrix
+% OUPUT (Structure):
+% nbchan: number of channels
+% trials: number of trials/segments
+% pnts: time points in a trial/segment
 % srate: sampling rate
-% winsec = time window in seconds (scalar)
-% nOverlap_per = percentage (0-100)
-% fig: ("Yes"/"No")
-% xmax: Max fz in plot
-% chan2use: Pick chanl num to plot
+% xmin: min length of a trial
+% xmax: max length of a trial
+% data: original signal that was input
+% hz: a vector of frequencies up to Nyquist
+% ampavg: average amplitude across all trials (2D)
+% powavg: average power across all trials (2D)
+% timewinpnts: time points for each time window
+% winsec: length of the time window in seconds
+% timewinover: percentage of overlap for the time windows
+% Note1: -
+% Note2: -
 %
 % Example:
-% welch_info = welchx(signal, srate, 1, 50, "Yes", 30);
+% fft_info = fftx_info = fftx2(signal, srate);
 
-function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, fig, xmax, chan2use)
+function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per)
 
     % If signal is single then convert to double
     if isa(signal, 'single')
@@ -24,21 +32,17 @@ function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, fig, xmax,
     end
 
     % Must take all trials and put them one after another in 2D
-    trialNum = size(signal,3);
-    ChanNum = size(signal,1);
-    signal = reshape(signal, ChanNum, []);
+    nbchan = size(signal,1);
+    pnts = size(signal,2);
+    trials = size(signal,3);
+    signalr = reshape(signal, nbchan, []);
 
     % Set parameters for Welch's Method
-    N = size(signal,2);
-    signal = signal;
+    N = size(signalr,2); % NOT redundant
     winlength = winsec * srate; % Length of time window in samples
     nOverlap_prop = nOverlap_per/100;
     nOverlap = round(srate * nOverlap_prop); % Calculate time points that correspond to the percent overalp
     winonsets = 1:nOverlap:N-winlength; % Window onset indices
-
-    % Obtain other parameters
-    chanNum = size(signal,1);
-    signal_class = "3D-Matrix";
     
     % Create frequency vector
     hzW = linspace(0, srate/2, floor(winlength/2) + 1);
@@ -48,15 +52,15 @@ function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, fig, xmax,
     hannNorm = sum(hannw); % Normalization factor
     
     % Initialize amplitude spectrum
-    sigampW = zeros(chanNum, length(hzW));
+    sigampW = zeros(nbchan, length(hzW));
     
     % loop through channels
-    for chani = 1:chanNum
+    for chani = 1:nbchan
 
         for wi = 1:length(winonsets)
         
             % Extract data segment
-            datachunk = signal(chani, winonsets(wi):winonsets(wi)+winlength-1);
+            datachunk = signalr(chani, winonsets(wi):winonsets(wi)+winlength-1);
         
             % Apply Hann window
             datachunkH = datachunk .* hannw;
@@ -81,43 +85,27 @@ function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, fig, xmax,
     PowerW_avg = mean(sigpowWN,3);
 
     % Create a note variable
-    Note = ['Avg Amp and Power Across ' num2str(trialNum) ' Trials Concatenated Together for Each ' num2str(size(signal,1)) ' Channels'];
+    Note1 = ['The input 3D signal was reshaped to be 2D'];
+    Note2 = ['Avg Amp and Power Across ' num2str(trials) ' Trials Concatenated Together for Each ' num2str(size(signal,1)) ' Channels'];
 
     % Store signal information in a struct
     welchx_info = struct();
-    welchx_info.OrgSignal = signal;
-    welchx_info.Class = signal_class;
-    welchx_info.Hz = hzW;
-    welchx_info.Amplitude_avg = AmplitudeW_avg;
-    welchx_info.Power_avg = PowerW_avg;
-    welchx_info.SamplingRate = srate;
-    welchx_info.TimeWinPnts = winlength;
-    welchx_info.WinSec = winlength/srate;
-    welchx_info.TimeWinOver = append(num2str(nOverlap_per), "%");
-    welchx_info.NumTimeWin = length(winonsets);
-    welchx_info.Note = Note; 
-
-
-    
-    if fig == "Yes"
-        % Plot results
-        figure(4), clf
-        
-        subplot(2,1,1) % Top-Half
-        plot(hzW, AmplitudeW_avg(chan2use,:), 'k', 'LineWidth', 2)
-        set(gca, 'xlim', [0 xmax])
-        xlabel('Frequency (Hz)')
-        ylabel('Amplitude')
-        title(['Avg Amplitude Spectral Density (ASD) Across ' num2str(size(signal,3)) ' Trials for channel ' num2str(chan2use)])
-        
-        subplot(2,1,2) % Bottom-Half
-        plot(hzW, PowerW_avg(chan2use,:), 'r', 'LineWidth', 2)
-        set(gca, 'xlim', [0 xmax])
-        xlabel('Frequency (Hz)')
-        ylabel('Power')
-        title(['Avg Power Spectral Density (PSD) Across ' num2str(size(signal,3)) ' Trials for channel ' num2str(chan2use)])
-
-    end
-
+    welchx_info.nbchan = nbchan;
+    welchx_info.trials = trials;
+    welchx_info.pnts = pnts;
+    welchx_info.srate = srate;
+    welchx_info.xmin = 0;
+    welchx_info.xmax = pnts / srate;
+    welchx_info.data = signal;
+    welchx_info.hz = hzW;
+    welchx_info.ampavg = AmplitudeW_avg;
+    welchx_info.powavg = PowerW_avg;
+    welchx_info.timewinpnts = winlength;
+    welchx_info.winsec = winlength/srate;
+    welchx_info.timewinover = append(num2str(nOverlap_per), "%");
+    welchx_info.numtimewin = length(winonsets);
+    welchx_info.note1 = Note1; 
+    welchx_info.note2 = Note2; 
 
 end
+

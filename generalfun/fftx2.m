@@ -1,19 +1,26 @@
-% Reports the:
-% 1) FFT Hz
-% 2) Fourier Coefficients
-% 3) Amplitude (correct units)
-% 4) Power (correct units)
+% INPUT
+% signal: a sinusoid matrix (3D)
+% srate: sampling rate (scalar)
 %
-% signal: A sinusoid wave
+% OUPUT (Structure):
+% nbchan: number of channels
+% trials: number of trials/segments
+% pnts: time points in a trial/segment
 % srate: sampling rate
-% fig: ("Yes"/"No")
-% xmax: Max fz in plot
-% chan2use: Pick chanl num to plot
+% xmin: min length of a trial
+% xmax: max length of a trial
+% data: original signal that was input
+% hz: a vector of frequencies up to Nyquist
+% fcoeff: fourier coefficients (3D)
+% ampavg: average amplitude across all trials (2D)
+% powavg: average power across all trials (2D)
+% powavg: average power across all trials in dB (2D)
+% Note: -
 %
 % Example:
-% fft_info = fftx(signal, srate, "Yes", 40);
+% fft_info = fftx_info = fftx2(signal, srate);
 
-function [fftx_info] = fftx2(signal, srate, fig, xmax, chan2use)
+function [fftx_info] = fftx2(signal, srate)
 
     % If signal is single then convert to double
     if isa(signal, 'single')
@@ -25,11 +32,13 @@ function [fftx_info] = fftx2(signal, srate, fig, xmax, chan2use)
     Nyquist = srate/2;
     N = size(signal,2);
 
+    % Dimensions of the signal
+    nbchan = size(signal,1);
+    trials = size(signal,3);
+    pnts = size(signal,2); % Redundant but its okay
+
     % Create the frequency vector
     hz = linspace(0,Nyquist,floor(N/2)+1);
-
-    % Signal class
-    signal_class = "3D-Matrix";
     
     % Calculate the Fourier Coefficient (Complex Numbers)
     FourierCoeff = fft(signal,[],2);
@@ -45,39 +54,28 @@ function [fftx_info] = fftx2(signal, srate, fig, xmax, chan2use)
     Amplitude_avg = mean(Amplitude,3);
     Power_avg = mean(Power,3);
 
+    % Calculate the Power Spectral Density in dB/Hz
+    Power_avgD = 10 * log10(Power_avg / srate);  % Convert to dB/Hz
+
     % Create a note variable
     Note = ['Avg Amp and Power Across ' num2str(size(signal,3)) ' Trials for Each ' num2str(size(signal,1)) ' Channels'];
+    Note = [ num2str(trials) ' trials were averaged to create Avg Amp and Power for each of the '  num2str(size(signal,1)) ' Channels'];
+
 
     % Store signal information in a struct
     fftx_info = struct();
-    fftx_info.OrgSignal = signal;
-    fftx_info.Class = signal_class;
-    fftx_info.Hz = hz;
-    fftx_info.FourierCoeff = FourierCoeff;
-    fftx_info.Amplitude_avg = Amplitude_avg;
-    fftx_info.Power_avg = Power_avg;
-    fftx_info.trialLength_sec = N/srate;
-    fftx_info.Note = Note; 
-
-     
-    if fig == "Yes"
-        % Plot the amplitude and power frequency
-        figure(3), clf
-        
-        subplot(2,1,1) % Top-Half
-        plot(hz, Amplitude_avg(chan2use,:),'k','linew',2)
-        set(gca, 'xlim', [0 xmax])
-        xlabel('Frequency (Hz)')
-        ylabel('Amplitude')
-        title(['Avg Amplitude Spectral Density (ASD) Across ' num2str(size(signal,3)) ' Trials for channel ' num2str(chan2use)])
-        
-        subplot(2,1,2) % Bottom_Half
-        plot(hz, Power_avg(chan2use,:),'r','linew',2)
-        set(gca, 'xlim', [0 xmax])
-        xlabel('Frequency (Hz)')
-        ylabel('Power')
-        title(['Avg Power Spectral Density (PSD) Across ' num2str(size(signal,3)) ' Trials for channel ' num2str(chan2use)])
-    
-    end
+    fftx_info.nbchan = nbchan;
+    fftx_info.trials = trials;
+    fftx_info.pnts = pnts;
+    fftx_info.srate = srate;
+    fftx_info.xmin = 0;
+    fftx_info.xmax = pnts / srate;
+    fftx_info.data = signal;
+    fftx_info.hz = hz;
+    fftx_info.fcoeff = FourierCoeff;
+    fftx_info.ampavg = Amplitude_avg;
+    fftx_info.powavg = Power_avg;
+    fftx_info.powavgd = Power_avgD;
+    fftx_info.note = Note; 
 
 end

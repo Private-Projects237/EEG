@@ -17,11 +17,10 @@
 % fullxmax: max length of the whole recording (sec)
 % data: new created signal
 % amp: a vector of amplitudes
-% frex: a vector of frequencies
+% frex: a vector of frequ
 %
 % Example:
-% newsig_info = creatSig2(nbchan, trials ,srate, trialsec, sinnum, noise, seed)
-
+% fft_info = fftx_info = fftx2(signal, srate);
 
 
 function [newsignalinfo] = creatSig2(nbchan, trials ,srate, trialsec, sinnum, noise, seed)
