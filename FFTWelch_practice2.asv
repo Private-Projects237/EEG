@@ -30,16 +30,34 @@ welch_info = welchx2(newsig_info.data, srate, 2, 50, 'filename_001')
 plot_welchx2(welch_info, 1, 40)
 
 
+% Obtain the .set file names
+inputdir = 'Y:\STUDY 1\All EEG Files Organized\Preprocessed_RAW\RAW_eyes_open_and_eyes_closed_cleaned\';  
+setfiles = dir(fullfile(inputdir, '*.set'));  
+filenames = {setfiles.name};  
+filenames = filenames(1:5);
 
+% Set directory to save files/structs
+outputdir = 'Y:\STUDY 1\All EEG Files Organized\Preprocessed_RAW\CSV_eyes open and eyes closed FFT\';
 
+% Identify files that have a struct completed
+structfiles = dir(fullfile(outputdir, '*RAW_struct_fftx2.mat'));  
+structsprocessed = {structfiles.name}; 
 
+% Remove filenames from loop iteration if they have a struct saved
+filesprocessed = strrep(structsprocessed, "_struct.mat", ".set");
+filenames = filenames(~ismember(filenames, filesprocessed));
+
+% Set up the frequency bands of interest and their Hz range
+bands = {'delta', 'theta', 'alpha', 'beta'};  
+frexvc = [1, 4; 4, 8; 8, 13; 13, 30];  % [start, end] Hz for each band
+
+% Run FBpowfftx- will create structs with fftx2 output for all files
+FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
 
 
 % Test
-structfilename = "EyesClosed10510_RAW_struct_fftx2.mat";
-fullstructfilename = append(outputdir, structfilename);
-data = load(fullstructfilename);
+
 
 afftx_info(2).powavg
 meanPowAvg = mean(cat(3, afftx_info.powavg), 3) % looks promising
