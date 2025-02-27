@@ -1,6 +1,7 @@
 % INPUT
 % signal: a sinusoid matrix (3D)
 % srate: sampling rate (scalar)
+% filename: file name 
 %
 % OUPUT (Structure):
 % nbchan: number of channels
@@ -20,7 +21,7 @@
 % Example:
 % fft_info = fftx_info = fftx2(signal, srate);
 
-function [fftx_info] = fftx2(signal, srate)
+function [fftx_info] = fftx2(signal, srate, filename)
 
     % If signal is single then convert to double
     if isa(signal, 'single')
@@ -64,6 +65,7 @@ function [fftx_info] = fftx2(signal, srate)
 
     % Store signal information in a struct
     fftx_info = struct();
+    fftx_info.filename = filename;
     fftx_info.nbchan = nbchan;
     fftx_info.trials = trials;
     fftx_info.pnts = pnts;

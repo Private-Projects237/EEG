@@ -3,6 +3,7 @@
 % srate: sampling rate (scalar)
 % winsec: time down length in seconds (0.5-2)
 % nOverlap_per: percentage of time window overlap (50)
+% filename: file name 
 %
 % OUPUT (Structure):
 % nbchan: number of channels
@@ -24,7 +25,7 @@
 % Example:
 % fft_info = fftx_info = fftx2(signal, srate);
 
-function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per)
+function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, filename)
 
     % If signal is single then convert to double
     if isa(signal, 'single')
@@ -90,6 +91,7 @@ function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per)
 
     % Store signal information in a struct
     welchx_info = struct();
+    fftx_info.filename = filename;
     welchx_info.nbchan = nbchan;
     welchx_info.trials = trials;
     welchx_info.pnts = pnts;

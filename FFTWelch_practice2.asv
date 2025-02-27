@@ -1,0 +1,85 @@
+% Set parameters
+nbchan = 10;
+trials = 10;
+srate = 100;
+trialsec = 10;
+sinnum = 25;
+noise = 2;
+seed = 212;
+
+% Use custom made function to create a signal - Part 2
+newsig_info = creatSig2(nbchan, trials ,srate, trialsec, sinnum, noise, seed)
+
+% Plot the created signal
+plot_CreatSig2(newsig_info,1,30)
+
+% run fftx2
+fftx_info = fftx2(newsig_info.data, srate, 'filename_001')
+
+% plot fftx2 results
+plot_fftx2(fftx_info, 1, 40)
+
+% run welchx2
+welch_info = welchx2(newsig_info.data, srate, 2, 50, 'filename_001')
+
+% plot welchx2
+plot_welchx2(welch_info, 1, 40)
+
+
+% Initialize struct array
+afftx = struct(); 
+
+% Define parameters
+numFiles = 50;  % Number of files to process
+bandNames = {'delta', 'theta', 'beta', 'alpha'};  % Frequency bands
+
+% Define frequency bands (no gamma)
+frequencyBands = [1, 4; 4, 8; 8, 13; 13, 30];  % [start, end] Hz for each band
+
+% Iterate over files
+for ffti = 1:numFiles
+
+    % Run fftx2
+    current_fftx = fftx2(newsig_info.data, srate, sprintf('filename_%03d', ffti));
+
+    % Save meaningful information
+    afftx(ffti).filename = current_fftx.filename;
+    afftx(ffti).hz = current_fftx.hz;
+    afftx(ffti).powavg = current_fftx.powavg + randn(size(current_fftx.powavg));
+
+    % Find the indices for each frequency band
+    fzi = zeros(size(frequencyBands, 1), 2);
+    for bandIdx = 1:size(frequencyBands, 1)
+        fzi(bandIdx, :) = dsearchn(afftx(ffti).hz', frequencyBands(bandIdx, :)');
+    end
+    
+    % First, store the FB values (range of raw values for each frequency band)
+    for bandIdx = 1:size(frequencyBands, 1)
+        bandName = bandNames{bandIdx};
+        afftx(ffti).(sprintf('%sFB', bandName)) = afftx(ffti).powavg(fzi(bandIdx, 1):fzi(bandIdx, 2));
+    end
+
+    % Now calculate the mean power for each frequency band 
+    for bandIdx = 1:size(frequencyBands, 1)
+        bandName = bandNames{bandIdx};
+        afftx(ffti).(sprintf('avg%s', bandName)) = mean(afftx(ffti).(sprintf('%sFB', bandName)));
+    end
+end
+
+% investigate the variance of power
+var(cat(3, afftx.avgdelta))
+var(cat(3, afftx.avgtheta))
+var(cat(3, afftx.avgbeta))
+var(cat(3, afftx.avgalpha))
+
+afftx_info(2).powavg
+meanPowAvg = mean(cat(3, afftx_info.powavg), 3) % looks promising
+
+
+mean(fftx_info(1).powavg,1)
+
+size(fftx_info(1).powavg)
+
+afftx_info(1).hz'
+
+
