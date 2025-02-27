@@ -91,7 +91,7 @@ function [welchx_info] = welchx2(signal, srate, winsec, nOverlap_per, filename)
 
     % Store signal information in a struct
     welchx_info = struct();
-    fftx_info.filename = filename;
+    welchx_info.filename = filename;
     welchx_info.nbchan = nbchan;
     welchx_info.trials = trials;
     welchx_info.pnts = pnts;
