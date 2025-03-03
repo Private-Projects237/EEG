@@ -1,8 +1,10 @@
 % INPUT
 % bands: names of frequency bands (character vector)
 % frexvc: frequency band ranges (numeric matrix)
-% filenames: EEG files that need to read (character vector)
 % inputdir: the pathway to where the EEG files are (character vector)
+% filenames: EEG files that need to read (character vector)
+% winsec: time window length in seconds
+% nOverlap_per: time window percent overlap
 % outputdir: The pathway to where the structures are saved  (character scalar)
 % outputname: The extension name for saved strucrt files (character)
 %
@@ -30,15 +32,21 @@
 % Example:
 % FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
-function FBpowelchx(bands, frexvc, winsec, nOverlap_per, filenames, inputdir, outputdir, outputname)
+function FBpowelchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outputname)
+
 
     % Identify files that have a struct completed (already processed)
-    structfiles = dir(fullfile(outputdir, '*', outputname));  
+    structfiles = dir(fullfile(outputdir, append('*', outputname)));  
     structsprocessed = {structfiles.name}; 
     
     % Remove filenames from loop iteration if they have a struct saved
     filesprocessed = strrep(structsprocessed, outputname, ".set");
     filenames = filenames(~ismember(filenames, filesprocessed));
+
+    % Create a structure called awelchx because MATLAB is being dumb
+    awelchx = struct('filename', {}, 'hz', {}, 'powavg', {}, 'chanlabl', {}, ...
+                 'deltaFB', {}, 'thetaFB', {}, 'alphaFB', {}, 'betaFB', {}, ...
+                 'avgdelta', {}, 'avgtheta', {}, 'avgalpha', {}, 'avgbeta', {});
 
     % Function to process FFT data from multiple files and save the results 
     parfor welci = 1:length(filenames)
@@ -86,15 +94,20 @@ function FBpowelchx(bands, frexvc, winsec, nOverlap_per, filenames, inputdir, ou
         end
     
     end
+
+    % only save files if there were any files processed
+    if length(filenames) ~= 0
         
-    % Save the information using a for loop instead of parfor
-    for awelchxi = 1:length(awelchx)
-        % Index the full struct -_-
-        current_awelchx = awelchx(awelchxi);
-        % create the save file na,e
-        savefilename = fullfile(outputdir, strrep(current_awelchx.filename, ".set", outputname));
-        % save the struct individually
-        save(savefilename, 'current_awelchx');
+        % Save the information using a for loop instead of parfor
+        for awelchxi = 1:length(awelchx)
+            % Index the full struct -_-
+            current_awelchx = awelchx(awelchxi);
+            % create the save file na,e
+            savefilename = fullfile(outputdir, strrep(current_awelchx.filename, ".set", outputname));
+            % save the struct individually
+            save(savefilename, 'current_awelchx');
+        end
+
     end
 
 end

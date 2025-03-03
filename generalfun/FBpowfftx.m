@@ -1,8 +1,8 @@
 % INPUT
 % bands: names of frequency bands (character vector)
 % frexvc: frequency band ranges (numeric matrix)
-% filenames: EEG files that need to read (character vector)
 % inputdir: the pathway to where the EEG files are (character vector)
+% filenames: EEG files that need to read (character vector)
 % outputdir: The pathway to where the structures are saved  (character scalar)
 % outputname: The extension name for saved strucrt files (character)
 %
@@ -30,10 +30,10 @@
 % Example:
 % FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
-function FBpowfftx(bands, frexvc, filenames, inputdir, outputdir, outputname)
+function FBpowfftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
 
     % Identify files that have a struct completed (already processed)
-    structfiles = dir(fullfile(outputdir, '*', outputname));  
+    structfiles = dir(fullfile(outputdir, append('*', outputname)));  
     structsprocessed = {structfiles.name}; 
     
     % Remove filenames from loop iteration if they have a struct saved
@@ -86,15 +86,20 @@ function FBpowfftx(bands, frexvc, filenames, inputdir, outputdir, outputname)
         end
     
     end
+
+    % only save files if there were any files processed
+    if length(filenames) ~= 0
         
-    % Save the information using a for loop instead of parfor
-    for afftxi = 1:length(afftx)
-        % Index the full struct -_-
-        current_afftx = afftx(afftxi);
-        % create the save file na,e
-        savefilename = fullfile(outputdir, strrep(current_afftx.filename, ".set", outputname));
-        % save the struct individually
-        save(savefilename, 'current_afftx');
+        % Save the information using a for loop instead of parfor
+        for afftxi = 1:length(afftx)
+            % Index the full struct -_-
+            current_afftx = afftx(afftxi);
+            % create the save file na,e
+            savefilename = fullfile(outputdir, strrep(current_afftx.filename, ".set", outputname));
+            % save the struct individually
+            save(savefilename, 'current_afftx');
+        end
+
     end
 
 end
