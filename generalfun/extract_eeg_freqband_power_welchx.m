@@ -32,7 +32,7 @@
 % Example:
 % FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
-function FBpowelchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outputname)
+function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outputname)
 
 
     % Identify files that have a struct completed (already processed)
@@ -42,11 +42,6 @@ function FBpowelchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, ou
     % Remove filenames from loop iteration if they have a struct saved
     filesprocessed = strrep(structsprocessed, outputname, ".set");
     filenames = filenames(~ismember(filenames, filesprocessed));
-
-    % Create a structure called awelchx because MATLAB is being dumb
-    awelchx = struct('filename', {}, 'hz', {}, 'powavg', {}, 'chanlabl', {}, ...
-                 'deltaFB', {}, 'thetaFB', {}, 'alphaFB', {}, 'betaFB', {}, ...
-                 'avgdelta', {}, 'avgtheta', {}, 'avgalpha', {}, 'avgbeta', {});
 
     % Function to process FFT data from multiple files and save the results 
     parfor welci = 1:length(filenames)
@@ -77,17 +72,36 @@ function FBpowelchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, ou
                 tempStruct.(sprintf('%sFB', bandName)) = tempStruct.powavg(:,fzi(bandIdx, 1):fzi(bandIdx, 2));
             end
     
-            % Compute mean for each frequency band
+            % Compute the sum for each frequency band (Absolute Power)
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                tempStruct.(sprintf('abs%s', bandName)) = sum(tempStruct.(sprintf('%sFB', bandName)),2);
+            end
+    
+            % Compute mean for each frequency band (Averaged Power Within FB)
             for bandIdx = 1:size(frexvc, 1)
                 bandName = bands{bandIdx};
                 tempStruct.(sprintf('avg%s', bandName)) = mean(tempStruct.(sprintf('%sFB', bandName)),2);
+            end
+
+            % Compute total power across all frequency bands
+            totalPower = zeros(size(tempStruct.powavg, 1), 1); % Initialize total power vector
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                totalPower = totalPower + sum(tempStruct.(sprintf('%sFB', bandName)), 2); % Sum power across all bands
+            end
+            
+            % Compute relative power for each frequency band
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                % Calculate relative power by dividing the absolute power of the band by the total power
+                tempStruct.(sprintf('rel%s', bandName)) = tempStruct.(sprintf('abs%s', bandName)) ./ totalPower;
             end
 
             % Save the temporary struct into another struct for later
             % saving
             awelchx(welci) = tempStruct;
             
-    
         catch ME
             fprintf('Error processing file %s: %s\n', filenames{welci}, ME.message);
         
