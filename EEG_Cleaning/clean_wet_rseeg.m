@@ -1,6 +1,6 @@
 % INPUT: 
 % EEG_fullpath: EEG pathway and file names together (ex: 'C:/user/EEG/001_GnG.eeg')
-% EEG_file_type: EEG file extension ('.set'/'.eeg')
+% EEG_file_type: EEG file extension ('.set'/'.vhdr')
 % EEG_save_path: Pathway to save cleaned EEG files
 % EEG_csv_save_path: Pathway to save EEG cleaning QS report
 % EEG_excel_save_path: Pathway to create the FINAL EEG cleaning QS report

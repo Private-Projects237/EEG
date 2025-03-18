@@ -1,0 +1,128 @@
+% INPUT: 
+% EEG_fullpath: EEG pathway and file names together (ex: 'C:/user/EEG/001_GnG.eeg')
+% EEG_file_type: EEG file extension ('.set'/'.vhdr')
+% create_ouput_dir: Creates folder names if they don't exit ('Yes'/'No')
+% chan_loc: channel location pathway
+% electrode_num : number of electrodes in the recording (62, 32)
+% Band-pass filter: provide a range within brackets (ex: [1 30])
+% srate_ds : sampling rate to downsample to
+% noiseThreshold_uV: EEG segment rejection threshold (70, 100)
+% input_ex: Part of the EEG name and extension (ex: '_RAW.set')
+% output_ex: Part of the EEG name and extension after cleaning (ex: '_cleaned_RAW.set')
+% EEG_save_path: Pathway to save cleaned EEG files
+% EEG_csv_save_path: Pathway to save EEG cleaning QS report
+% EEG_excel_save_path: Pathway to create the FINAL EEG cleaning QS report
+
+    current_eegFile = '160_EO_DE.vhdr';
+    EEG_Pathway = 'M:\NEUROIMAGING_PILOT\Data\RAW_DATA\DRYEEG\';
+
+function output = clean_dry_rseeg(eegFiles, EEG_Pathway)
+
+    % Initialize a struct to store results
+    results = struct();
+    
+    % Load in the file
+    EEG = pop_loadbv(EEG_Pathway, current_eegFile);
+    results.FileName = current_eegFile; % Log file name
+    
+    % Band-pass filter- which basically detrends the data 
+    EEG = pop_eegfiltnew(EEG, 'locutoff',1,'hicutoff',30);
+    results.FilterApplied = '1-30 Hz'; % Log filter settings
+    
+    % Obtain channel number
+    chanNum = EEG.nbchan; 
+    results.TotalChannels = chanNum; % Log total number of channels
+    
+    % Flags noisy channels part 1 (correlating poorly with other channels)
+    [~, badChannelsIdx] = clean_channels(EEG, .4, 4, 5);
+    warning('Bad channels were not actually removed')
+    
+    % Extract bad channel information
+    if sum(badChannelsIdx) > 0
+        badChannelLabels = {EEG.chanlocs(badChannelsIdx).labels}; % Labels of bad channels
+        badChannelsNum = find(badChannelsIdx);
+    else
+        badChannelLabels = {}; % Empty cell array
+        badChannelsNum = [];
+    end
+    results.BadChannels_Correlation = badChannelLabels; % Log bad channels from correlation
+    results.NumBadChannels_Correlation = length(badChannelLabels); % Log number of bad channels
+    
+    % Removing noisy channels part 2 (having too much variance in amplitude)
+    [badChannelLabels2, badChannelsNum2] = detect_noisy_channels_segmented(EEG, 5, 10);
+    results.BadChannels_Variance = badChannelLabels2; % Log bad channels from variance
+    results.NumBadChannels_Variance = length(badChannelLabels2); % Log number of bad channels
+    
+    % Save all badChannels into one object save with index
+    allBadChannelLabels = unique([badChannelLabels, badChannelLabels2]);
+    allbadChannelsNum = unique([badChannelsNum; badChannelsNum2]);  
+    results.AllBadChannels = allBadChannelLabels; % Log all bad channels
+    results.NumAllBadChannels = length(allBadChannelLabels); % Log total number of bad channels
+    
+    % Interpolate bad channels
+    EEG = pop_interp(EEG, [allbadChannelsNum], 'spherical');
+    results.InterpolationDone = true; % Log interpolation
+    
+    % Save the length of the recording in seconds
+    EEG_size_int = size(EEG.data);
+    Remaining_Samples_int = EEG_size_int(2);
+    results.RecordingLength_BeforeASR = Remaining_Samples_int / EEG.srate; % Log recording length before ASR
+    
+    % Now let's run ASR
+    EEG = clean_asr(EEG, 6, 0.5, [], 0.7, 0.15, [-3.5, 5.5], 1, false, false, []);
+    
+    % Save how many seconds are left after ASR
+    EEG_size_end = size(EEG.data);
+    Remaining_Samples_end = EEG_size_end(2);
+    results.RecordingLength_AfterASR = Remaining_Samples_end / EEG.srate; % Log recording length after ASR
+    
+    % Re-reference to the mastoid electrodes
+    refelec = [10 20];
+    EEG = pop_reref(EEG, refelec);
+    results.RereferencedTo = strjoin(arrayfun(@num2str, refelec, 'UniformOutput', false), ', '); % Log reference electrodes
+    
+    % Downsample (optional)
+    EEG = pop_resample(EEG, 500);
+    results.DownsampledTo = 500; % Log downsampling rate
+    
+    % Calculate PCA
+    PCA_num = chanNum - length(allbadChannelsNum) - length(refelec);
+    results.PCA_Dimension = PCA_num; % Log PCA dimension
+    
+    % Run ICA twice
+    EEG = pop_runica(EEG, 'extended', 1, 'pca', PCA_num, 'lrate', 5e-5, 'maxsteps', 2000, 'stop', 1e-7, 'verbose', 'off');
+    results.ICA_Done = true; % Log ICA completion
+    
+    % Run IC Label
+    EEG = iclabel(EEG);
+    results.ICLabel_Done = true; % Log IC Label completion
+    
+    % Save the IC classification matrix 
+    ic_scores = EEG.etc.ic_classification.ICLabel.classifications;
+    results.IC_Scores = ic_scores; % Log IC scores
+    
+    % Identify eye and muscle components
+    eye_comp = find(ic_scores(:, 2) > 0.8);
+    muscle_comp = find(ic_scores(:, 3) > 0.8);
+    heart_comp = find(ic_scores(:, 4) > 0.8);
+    line_comp = find(ic_scores(:, 5) > 0.8);
+    chan_comp = find(ic_scores(:, 6) > 0.8);
+    
+    % Save this information in an object 
+    results.EyeComponents = eye_comp; % Log eye components
+    results.MuscleComponents = muscle_comp; % Log muscle components
+    results.HeartComponents = heart_comp; % Log heart components
+    results.LineComponents = line_comp; % Log line noise components
+    results.ChannelComponents = chan_comp; % Log channel noise components
+    
+    % Combine eye and muscle component
+    components_to_reject = unique([eye_comp; muscle_comp; heart_comp; line_comp; chan_comp]);
+    results.ComponentsRemoved = components_to_reject; % Log all components to reject
+    
+    % Remove eye components 
+    EEG = pop_subcomp(EEG, components_to_reject, 0);
+    results.ComponentsRemovalDone = true; % Log component removal
+
+
+end
+
