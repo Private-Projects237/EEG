@@ -93,10 +93,13 @@ function output = clean_wet_rseeg(EEG_fullpath, EEG_file_type, EEG_save_path, EE
                 Bad_Channels = find(~EEG1.etc.clean_channel_mask);
                 results(ii).Num_Interpolation = length(Bad_Channels);
                 EEG = pop_interp(EEG, Bad_Channels, 'spherical');
+                Bad_Channels = {Bad_Channels};
             else
                 results(ii).Num_Interpolation = 0;
                 Bad_Channels = {0};
             end
+
+            % Save the results from remove channels
             results(ii).BadChannelsString = sprintf('%g, ', Bad_Channels{1});
             results(ii).BadChannelsString(end-1:end) = []; % Remove the trailing comma and space
             
@@ -163,84 +166,117 @@ function output = clean_wet_rseeg(EEG_fullpath, EEG_file_type, EEG_save_path, EE
             % Save the processed EEG file
             Save_FileName = strrep(Current_eegFile, input_ex, output_ex);
             EEG = pop_saveset(EEG, 'filename', Save_FileName, 'filepath', EEG_save_path);
-        
+
+            % Organize the QS measures into a table
+            Output_Table = table( ...
+                {results(ii).FileDate}, {eegFiles{ii}}, ...
+                results(ii).InitialSec, results(ii).rank1, ...
+                results(ii).StartingChannels, results(ii).Num_Interpolation, ...
+                {results(ii).BadChannelsString}, {results(ii).reReferenceType}, results(ii).PCA_number, ...
+                results(ii).RejectedComponentNumber, {results(ii).CompRejsString}, ...
+                results(ii).RemainingSec, results(ii).Percent_Remaining, ...
+                results(ii).rank2, {results(ii).Error}, ...
+                'VariableNames', {'Date', 'File_Name', 'Start_Recording_Sec', ...
+                'EEG_Rank1', 'Channel_Num', 'Interpolated_Chan_Num', ...
+                'Interpolated_Channels', 'reReference_Type' ,'PCA_Number', 'Rejected_Components_Num', ...
+                'Rejected_Components' ,'Remaining_Recording_Sec', 'Percent_Remaining', ...
+                'EEG_Rank2', 'Error'});
+
+            % Save this information
+            writetable(Output_Table, fullfile(EEG_csv_save_path, append(strrep(eegFiles{ii}, input_ex, output_ex),'.csv')  ));
+         
         catch ME
 
-            % Save the error message as an object
-            results(ii).Error = ME.message;
-    
-            % Save results only if the value hasn't already been set
-            if isempty(results(ii).FileDate)
-                results(ii).FileDate = '-';
-            end
-            if sum(results(ii).InitialSec) == 0
-                results(ii).InitialSec = 0;
-            end
-            if sum(results(ii).rank1) == 0
-                results(ii).rank1 = 0;
-            end
-            if sum(results(ii).StartingChannels) == 0
-                results(ii).StartingChannels = 0;
-            end
-            if sum(results(ii).Num_Interpolation) == 0
-                results(ii).Num_Interpolation = 0;
-            end
-            if isempty(results(ii).BadChannelsString)
-                results(ii).BadChannelsString = '-';
-            end
-            if isempty(results(ii).reReferenceType)
-                results(ii).reReferenceType = '-';
-            end
-            if sum(results(ii).PCA_number) == 0
-                results(ii).PCA_number = 0;
-            end
-            if sum(results(ii).RejectedComponentNumber) == 0
-                results(ii).RejectedComponentNumber = 0;
-            end
-            if isempty(results(ii).CompRejsString)
-                results(ii).CompRejsString = {'-'};
-            end
-            if sum(results(ii).RemainingSec) == 0
-                results(ii).RemainingSec = 0;
-            end
-            if sum(results(ii).Percent_Remaining) == 0
-                results(ii).Percent_Remaining = 0;
-            end
-            if sum(results(ii).rank2) == 0
-                results(ii).rank2 = 0;
-            end
-
-        end
-
+                % Save the error message as an object
+                results(ii).Error = ME.message;
         
+                % Save results only if the value hasn't already been set
+                if isempty(results(ii).FileDate)
+                    results(ii).FileDate = '-';
+                end
+                if sum(results(ii).InitialSec) == 0
+                    results(ii).InitialSec = 0;
+                end
+                if sum(results(ii).rank1) == 0
+                    results(ii).rank1 = 0;
+                end
+                if sum(results(ii).StartingChannels) == 0
+                    results(ii).StartingChannels = 0;
+                end
+                if sum(results(ii).Num_Interpolation) == 0
+                    results(ii).Num_Interpolation = 0;
+                end
+                if isempty(results(ii).BadChannelsString)
+                    results(ii).BadChannelsString = '-';
+                end
+                if isempty(results(ii).reReferenceType)
+                    results(ii).reReferenceType = '-';
+                end
+                if sum(results(ii).PCA_number) == 0
+                    results(ii).PCA_number = 0;
+                end
+                if sum(results(ii).RejectedComponentNumber) == 0
+                    results(ii).RejectedComponentNumber = 0;
+                end
+                if isempty(results(ii).CompRejsString)
+                    results(ii).CompRejsString = {'-'};
+                end
+                if sum(results(ii).RemainingSec) == 0
+                    results(ii).RemainingSec = 0;
+                end
+                if sum(results(ii).Percent_Remaining) == 0
+                    results(ii).Percent_Remaining = 0;
+                end
+                if sum(results(ii).rank2) == 0
+                    results(ii).rank2 = 0;
+                end
+    
+                % Organize the QS measures into a table
+                Output_Table = table( ...
+                    {results(ii).FileDate}, {eegFiles{ii}}, ...
+                    results(ii).InitialSec, results(ii).rank1, ...
+                    results(ii).StartingChannels, results(ii).Num_Interpolation, ...
+                    {results(ii).BadChannelsString}, {results(ii).reReferenceType}, results(ii).PCA_number, ...
+                    results(ii).RejectedComponentNumber, {results(ii).CompRejsString}, ...
+                    results(ii).RemainingSec, results(ii).Percent_Remaining, ...
+                    results(ii).rank2, {results(ii).Error}, ...
+                    'VariableNames', {'Date', 'File_Name', 'Start_Recording_Sec', ...
+                    'EEG_Rank1', 'Channel_Num', 'Interpolated_Chan_Num', ...
+                    'Interpolated_Channels', 'reReference_Type' ,'PCA_Number', 'Rejected_Components_Num', ...
+                    'Rejected_Components' ,'Remaining_Recording_Sec', 'Percent_Remaining', ...
+                    'EEG_Rank2', 'Error'});
+    
+                % Save this information
+                writetable(Output_Table, fullfile(EEG_csv_save_path, append(strrep(eegFiles{ii}, input_ex, output_ex),'.csv')  ));
+        end
+    
     end
 
-    % Save results to CSV
-    for ii = 1:N
-        Output_Table = table( ...
-            {results(ii).FileDate}, {eegFiles{ii}}, ...
-            results(ii).InitialSec, results(ii).rank1, ...
-            results(ii).StartingChannels, results(ii).Num_Interpolation, ...
-            {results(ii).BadChannelsString}, {results(ii).reReferenceType}, results(ii).PCA_number, ...
-            results(ii).RejectedComponentNumber, {results(ii).CompRejsString}, ...
-            results(ii).RemainingSec, results(ii).Percent_Remaining, ...
-            results(ii).rank2, {results(ii).Error}, ...
-            'VariableNames', {'Date', 'File_Name', 'Start_Recording_Sec', ...
-            'EEG_Rank1', 'Channel_Num', 'Interpolated_Chan_Num', ...
-            'Interpolated_Channels', 'reReference_Type' ,'PCA_Number', 'Rejected_Components_Num', ...
-            'Rejected_Components' ,'Remaining_Recording_Sec', 'Percent_Remaining', ...
-            'EEG_Rank2', 'Error'});
-        writetable(Output_Table, fullfile(EEG_csv_save_path, append(strrep(eegFiles{ii}, input_ex, output_ex),'.csv')  ));
-    end
-
-
+   
     % Combine all CSV reports
     csvFiles = dir(fullfile(EEG_csv_save_path, '*.csv'));
     combinedData = table();
+    
+    % Loop through CSV files and merge them
     for i = 1:length(csvFiles)
         currentData = readtable(fullfile(csvFiles(i).folder, csvFiles(i).name));
+    
+        % Convert Interpolated_Channels column to cell strings if necessary
+        if isnumeric(currentData.Interpolated_Channels)
+            currentData.Interpolated_Channels = cellstr(num2str(currentData.Interpolated_Channels));
+        end
+    
+        % Ensure 'Error' is always stored as a cell array of strings
+        if isnumeric(currentData.Error) || islogical(currentData.Error)
+            currentData.Error = cellstr(num2str(currentData.Error));
+        elseif isstring(currentData.Error)
+            currentData.Error = cellstr(currentData.Error);
+        end
+    
+        % Combine the data
         combinedData = [combinedData; currentData];
     end
+
     % combinedData = sortrows(combinedData, 'Date');
     CleaningEEGQC_fullpath = append(EEG_excel_save_path, 'Wet_EEG_Cleaning_Final_Report.xlsx');
     writetable(combinedData, CleaningEEGQC_fullpath);

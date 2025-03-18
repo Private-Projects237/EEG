@@ -30,7 +30,8 @@
 % Example:
 % FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
-function FBpowfftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
+function extract_eeg_freqband_power_fftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
+
 
     % Identify files that have a struct completed (already processed)
     structfiles = dir(fullfile(outputdir, append('*', outputname)));  
@@ -55,6 +56,8 @@ function FBpowfftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
             tempStruct.filename = current_fftx.filename;
             tempStruct.hz = current_fftx.hz;
             tempStruct.powavg = current_fftx.powavg;
+            tempStruct.powabs = current_fftx.powavg;
+            tempStruct.powrel = current_fftx.powavg;
             tempStruct.chanlabl = {EEG.chanlocs.labels}';
     
             % Find indices for frequency bands
@@ -68,11 +71,31 @@ function FBpowfftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
                 bandName = bands{bandIdx};
                 tempStruct.(sprintf('%sFB', bandName)) = tempStruct.powavg(:,fzi(bandIdx, 1):fzi(bandIdx, 2));
             end
+
+            % Compute the sum for each frequency band (Absolute Power)
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                tempStruct.(sprintf('abs%s', bandName)) = sum(tempStruct.(sprintf('%sFB', bandName)),2);
+            end
     
-            % Compute mean for each frequency band
+            % Compute mean for each frequency band (Power Spectral Density- Normalized)
             for bandIdx = 1:size(frexvc, 1)
                 bandName = bands{bandIdx};
                 tempStruct.(sprintf('avg%s', bandName)) = mean(tempStruct.(sprintf('%sFB', bandName)),2);
+            end
+
+            % Compute total power across all frequency bands
+            totalPower = zeros(size(tempStruct.powavg, 1), 1); % Initialize total power vector
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                totalPower = totalPower + sum(tempStruct.(sprintf('%sFB', bandName)), 2); % Sum power across all bands
+            end
+            
+            % Compute relative power for each frequency band
+            for bandIdx = 1:size(frexvc, 1)
+                bandName = bands{bandIdx};
+                % Calculate relative power by dividing the absolute power of the band by the total power
+                tempStruct.(sprintf('rel%s', bandName)) = tempStruct.(sprintf('abs%s', bandName)) ./ totalPower;
             end
 
             % Save the temporary struct into another struct for later
@@ -103,4 +126,5 @@ function FBpowfftx(bands, frexvc, inputdir, filenames, outputdir, outputname)
     end
 
 end
+
 
