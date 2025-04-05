@@ -1,6 +1,6 @@
 % INPUT: 
 % EEG_dir: directory to where the EEG files are (ex: 'C:/user/EEG/RAW_DATA/)
-% EEG_type: the extension of the eeg file (ex: .vmrk)
+% EEG_type: the extension of the eeg file (ex: .vhdr)
 % full: gives you the full filename (ex: 'yes';'no')
 %
 % OUTPUT
@@ -17,6 +17,6 @@ function [EEGFileNames] = load_EEG_names(EEG_dir, EEG_type, full)
 
     if strcmp(full, 'yes')       
         % Merge the full pathway and the EEG filenames together
-        EEGFileNames = append(EEG_dir, EEG_filenames);
+        EEGFileNames = append(EEG_dir, EEGFileNames);
     end
 end
