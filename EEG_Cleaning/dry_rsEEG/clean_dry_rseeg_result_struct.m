@@ -7,6 +7,7 @@ function result = clean_dry_rseeg_result_struct(fileName)
     
     % Populate the struct with default values
     result.FileName = fileName;
+    result.Date = '-';
     result.Rank_BeforeCleaning = NaN;
     result.StartingChan = NaN;
     result.BandPassFilt = '-';

@@ -40,6 +40,10 @@ function clean_dry_rseeg(eegFiles, EEG_Pathway, EEG_save_path, EEG_csv_save_path
                 % Convert EEG data to double
                 EEG.data = double(EEG.data);
 
+                % === Obtain Date of the EEG File
+                fileInfo = dir(fullfile(EEG_Pathway, currentBatch{i}));
+                result.Date = {fileInfo.date};
+
                 % === Rank Before Processing ===
                 result.Rank_BeforeCleaning = rank(double(reshape(EEG.data, EEG.nbchan, [])));
 
