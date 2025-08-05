@@ -6,10 +6,10 @@
 % winsec: time window length in seconds
 % nOverlap_per: time window percent overlap
 % outputdir: The pathway to where the structures are saved  (character scalar)
-% outputdir2: The pathway to where the data to generate plots is saved (channel, hz, power matrix)
+% outpurdir2: The pathway to where the data to generate plots is saved (channel, hz, power matrix)
 % outputname: The extension name for saved strucrt files (character)
 %
-% OUTPUT (Structure; .mat file):
+% OUPUT (Structure; .mat file):
 % filename: the name of the original EEG file
 % hz: frequency vector
 % powavg: avg power corresponding to frequency vector
@@ -23,21 +23,17 @@
 % avgalpha: the average power within the deltaFB time points
 % avgbeta: the average power within the deltaFB time points
 %
-% OUTPUT (.txt file)
-% A data frame with information about the power for each channel across
-% the high possible Hz that is sensible. This information is good for
-% plotting the power spectrums for rsEEG.
-%
 % Description: '.set' files will be loaded and then and then 
-% welchx2 will be used on each one. The average power output
-% from welchx2 will be indexed into frequency bands and then
+% fftx2 will be used on each one. The average power output
+% from fftx2 will be indexed into frequency bands and then
 % averaged to get one power value per each frequency bands for
 % all channels. This information will be saved as a structure
 % array and be saved as a .mat file for all EEG files. 
 %
+% Example:
+% FBpowfftx(bands, frexvc, filenames, inputdir, outputdir)
 
-
-function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outputdir2, outputname)
+function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outpurdir2, outputname)
 
 
     % Identify files that have a struct completed (already processed)
@@ -118,7 +114,7 @@ function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, w
             dataset(2:end,2:end) = num2cell(tempStruct.powavg);
 
             % Save the dataset
-            writetable(cell2table(dataset), append(outputdir2, strrep(tempStruct.filename, '.set', '_ch_hz_pow.txt')),...
+            writetable(cell2table(dataset), append(outpurdir2, ),...
                        'Delimiter', '\t', 'WriteVariableNames', false);
 
         catch ME
