@@ -1,13 +1,14 @@
 % INPUT
 % bands: names of frequency bands (character vector)
 % frexvc: frequency band ranges (numeric matrix)
-% inputdir: the pathway to where the EEG files are (character vector)
+% EEG_Clean_Pathway: the pathway to where the EEG files are (character vector)
 % filenames: EEG files that need to read (character vector)
 % winsec: time window length in seconds
 % nOverlap_per: time window percent overlap
-% outputdir: The pathway to where the structures are saved  (character scalar)
-% outputdir2: The pathway to where the data to generate plots is saved (channel, hz, power matrix)
+% EEG_Welch_Pathway: The pathway to where the structures are saved  (character scalar)
+% EEG_Plot_Pathway: The pathway to where the data to generate plots is saved (channel, hz, power matrix)
 % outputname: The extension name for saved strucrt files (character)
+% preprocParams: The struct that has the parameters for preprocessing
 %
 % OUTPUT (Structure; .mat file):
 % filename: the name of the original EEG file
@@ -36,12 +37,11 @@
 % array and be saved as a .mat file for all EEG files. 
 %
 
-
-function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, winsec, nOverlap_per, outputdir, outputdir2, outputname)
+function extract_eeg_freqband_power_welchx(bands, frexvc, EEG_Clean_Pathway, filenames, winsec, nOverlap_per, EEG_Welch_Pathway, EEG_Plot_Pathway, outputname, preprocParams)
 
 
     % Identify files that have a struct completed (already processed)
-    structfiles = dir(fullfile(outputdir, append('*', outputname)));  
+    structfiles = dir(fullfile(EEG_Welch_Pathway, append('*', outputname)));  
     structsprocessed = {structfiles.name}; 
     
     % Remove filenames from loop iteration if they have a struct saved
@@ -52,11 +52,11 @@ function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, w
     parfor welci = 1:length(filenames)
         try
             % Construct the full path to the file
-            currentFile = fullfile(inputdir, filenames{welci});
-            EEG = pop_loadset('filename', filenames{welci}, 'filepath', inputdir);
+            currentFile = fullfile(EEG_Clean_Pathway, filenames{welci});
+            EEG = pop_loadset('filename', filenames{welci}, 'filepath', EEG_Clean_Pathway);
 
-            % Run welchx2
-            current_welchx = welchx2(EEG.data, EEG.srate, winsec, nOverlap_per, filenames{welci});
+            % Run welchx3
+            current_welchx = welchx3(EEG.data, EEG.srate, winsec, nOverlap_per, filenames{welci}, preprocParams.badSegthresh);
     
             % Temporary struct to store data
             tempStruct = struct();
@@ -118,7 +118,7 @@ function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, w
             dataset(2:end,2:end) = num2cell(tempStruct.powavg);
 
             % Save the dataset
-            writetable(cell2table(dataset), append(outputdir2, strrep(tempStruct.filename, '.set', '_ch_hz_pow.txt')),...
+            writetable(cell2table(dataset), append(EEG_Plot_Pathway, strrep(tempStruct.filename, '.set', '_ch_hz_pow.txt')),...
                        'Delimiter', '\t', 'WriteVariableNames', false);
 
         catch ME
@@ -136,7 +136,7 @@ function extract_eeg_freqband_power_welchx(bands, frexvc, inputdir, filenames, w
             % Index the full struct -_-
             current_awelchx = awelchx(awelchxi);
             % create the save file na,e
-            savefilename = fullfile(outputdir, strrep(current_awelchx.filename, ".set", outputname));
+            savefilename = fullfile(EEG_Welch_Pathway, strrep(current_awelchx.filename, ".set", outputname));
             % save the struct individually
             save(savefilename, 'current_awelchx');
         end

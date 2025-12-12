@@ -8,7 +8,7 @@
 function combinedTable = organizing_QC(EEG_csv_save_path, fileExten)
 
     % Extract the files from that location
-    filenames_csv = load_EEG_names(EEG_csv_save_path, 'dry.csv', 'yes');
+    filenames_csv = load_EEG_names(EEG_csv_save_path, fileExten, 'yes');
 
     % Create an empty table
     combinedTable = table();

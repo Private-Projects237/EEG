@@ -7,7 +7,8 @@
 
     % Extract data and sampling rate
 
-    function avgAmplitudeRange = get_eeg_seg_amp_range(EEG, segmentLengthSec)
+    
+function avgAmplitudeRange = get_eeg_seg_amp_range(EEG, segmentLengthSec)
   
     if isstruct(EEG) && isfield(EEG, 'data')
         eegData = EEG.data; % [channels x time]

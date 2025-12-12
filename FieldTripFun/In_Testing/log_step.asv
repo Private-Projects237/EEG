@@ -1,0 +1,42 @@
+function data = log_step(data, step_name, cfg_in, stats)
+
+    % The fields that make up the `.history` structure
+    step.id    = sprintf('%s_%s', step_name, datestr(now,'HHMMSSfff'));
+    step.name  = step_name;
+    step.time  = datestr(now,'yyyy-mm-dd HH:MM:SS');
+    step.cfg   = cfg_in;
+    step.stats = stats;
+    step.step  = numel(data.cfg.preproc.history) + 1;
+
+    % Introducing this information at the end of the existing matrix
+    data.cfg.preproc.history{end+1} = step;
+
+    % FLATTEN ALL stats into summary (with prefix)
+    prefix = [step_name '_s' step.s'_'];
+    fn = fieldnames(stats);
+    for i = 1:numel(fn)
+        data.cfg.preproc.summary.([prefix fn{i}]) = stats.(fn{i});
+    end
+end
+
+
+
+
+% ORIGINAL
+
+% function data = log_step(data, step_name, cfg_in, stats)
+%     data = init_tracker(data);
+%     step.id    = sprintf('%s_%s', step_name, datestr(now,'HHMMSSfff'));
+%     step.name  = step_name;
+%     step.time  = datestr(now,'yyyy-mm-dd HH:MM:SS');
+%     step.cfg   = cfg_in;
+%     step.stats = stats;
+%     data.cfg.preproc.history{end+1} = step;
+% 
+%     % FLATTEN ALL stats into summary (with prefix)
+%     prefix = [step_name '_'];
+%     fn = fieldnames(stats);
+%     for i = 1:numel(fn)
+%         data.cfg.preproc.summary.([prefix fn{i}]) = stats.(fn{i});
+%     end
+% end
