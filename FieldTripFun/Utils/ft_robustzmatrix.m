@@ -37,8 +37,16 @@ else
 end
 
 % Convert the segmented data into a 3D (EEG) type matrix
-EEG = cat(3, data_seg.trial{:}); % chan x samples x trials
-chan_trial_var = squeeze(var(EEG, [], 2));
+nTrials   = numel(data_seg.trial);
+nChans    = numel(data_seg.label);         
+chan_trial_var = nan(nTrials, nChans);
+for i = 1:nTrials
+    this_trial = data_seg.trial{i};         % chan × time_i
+    chan_trial_var(i, :) = var(this_trial, 0, 2);  % variance along time (dim 2), for each channel
+end
+
+% Transpose the matrix
+chan_trial_var = chan_trial_var';
 
 % Robust z-scoring
 if strcmp(type, 'all')

@@ -1,17 +1,25 @@
 function data_rej = ft_rejectbadsegments(cfg, data)
 % FT_REJECTBADSEGMENTS This function uses trial variance over median trial
 % variance ratios and robust z-scores of high frq band-pass filtered data
-% to identidy noisy trials and delete them. All variance comparisons are
+% to identidy noisy trials and not keeps them! All variance comparisons are
 % done in the time domain not frequency domain. Additionally, we can
 % 'save' bad trials if only a few channels are contributing to their high
 % variance- thus allowing for these channels to be interpolate in future
-% steps, saving the trial from unnecessary deletion. 
+% steps, saving the trial from unnecessary deletion.
+%
+% UPDATE
+%   Initially we used the `ft_rejectartifact()` to remove bad segments, but
+%   that caused problems when epoches overlapped. To circumvent this, we
+%   are now using `ft_selectdata()` to keep good trials instead.
 %
 % INPUT
-%   data = continuous (non-segmented) EEG data in FieldTrip framework
+%   data = continuous or segmented EEG data
 % 
-% INPUT
-%   cfg.rejectbadseg.seglength        = 2 (default); segment seconds
+% INPUT (Data Structure)
+%   cfg.removebadchann.datatype       = 'rseeg' or 'erp'
+%   cfg.removebadchann.seglength      = 2 (default); only applies to 'rseeg' will be ignored in 'erp'
+%
+% INPUT (Artifact Thresholds)
 %   cfg.rejectbadseg.mthresh          = 5 (default); x times larger than median trial variace
 %   cfg.rejectbadseg.highfrqbp        = [30 140] (default): band-pass filter to detect muscles or high artifact
 %   cfg.rejectbadseg.zthresh          = 3.5 (default); Robust z-score thresh
@@ -42,6 +50,8 @@ function data_rej = ft_rejectbadsegments(cfg, data)
 % OUPUT
 %   data_rej = segmented EEG data in FieldTrip framework with bad trials removed
 
+% Creating a vector of allowed datatypes
+allowed_datatypes = {'rseeg', 'erp'};
 
 % Save the original configuration
 cfg_org = cfg; 
@@ -51,7 +61,9 @@ cfg = ft_checkconfig(cfg, 'required', {'rejectbadseg'});
 
 % Set up configuration defaults
 cfg.rejectbadseg = ft_getopt(cfg, 'rejectbadseg', struct());
+datatype         = ft_getopt(cfg.rejectbadseg, 'datatype', []);
 seglength        = ft_getopt(cfg.rejectbadseg, 'seglength', 2);
+
 mthresh          = ft_getopt(cfg.rejectbadseg, 'mthresh', 5);
 highfrqbp        = ft_getopt(cfg.rejectbadseg, 'highfrqbp', [30 140]);
 zthresh          = ft_getopt(cfg.rejectbadseg, 'zthresh', 3.5);
@@ -88,6 +100,12 @@ if strcmp(visibleplots, 'yes'); Show = 'on'; else; Show = 'off'; end
 % Validate input data
 data = ft_checkconfig(data, 'required', {'label', 'trial', 'time', 'fsample', 'sampleinfo'});
 
+% Error management
+if ~any(strcmp(datatype, allowed_datatypes))
+    error('cfg.rejectbadseg.datatype must be one of: ''rseeg'' or ''erp''. Got: ''%s''.', datatype);
+end
+
+
 % Best for eyes open conditions
 if strcmp(peakprotection, 'yes')
 
@@ -122,22 +140,30 @@ end
 %%%%%%%%%%%%%% IDENTIFY POTENTIALLY BAD TRIALS TIME %%%%%%%%%%%%%%%%%%
 
 % Segment the data into a TEMPORAY DATA SET
-cfg_seg = [];
-cfg_seg.length  = seglength; % segment (trial) length in seconds
-cfg_seg.overlap = 0;         % 0% overlap
-data_seg_temp = ft_redefinetrial(cfg_seg, temp_dat);
+if strcmp(datatype, 'rseeg')
+    cfg_seg = [];
+    cfg_seg.length  = seglength; % segment (trial) length in seconds
+    cfg_seg.overlap = 0;         % 0% overlap
+    data_seg_temp = ft_redefinetrial(cfg_seg, temp_dat);
+elseif strcmp(datatype, 'erp')
+    data_seg_temp = temp_dat;
+end
 
 % step 3: calculate the variance for each trial
-EEG = cat(3, data_seg_temp.trial{:}); % chan x samples x trials
-var_per_trial = var(EEG, 0, [1 2]);
-var_per_trial = squeeze(var_per_trial)';
+nTrials   = numel(data_seg_temp.trial);
+nChans    = numel(data_seg_temp.label);         
+var_per_trial = nan(nTrials, nChans);
+for i = 1:nTrials
+    this_trial = data_seg_temp.trial{i};         % chan × time_i
+    var_per_trial(i, :) = var(this_trial, 0, 2);  % variance along time (dim 2), for each channel
+end
 
 % Get the trial variance to median trial variance ratio
 med_var = median(var_per_trial);
 ratio_to_med = var_per_trial / med_var;
 
 % Get the index of the trials that are problematic
-bad_trials = find(ratio_to_med > mthresh);
+bad_trials = find(ratio_to_med > mthresh)';
 
 %%%%%%%%%%%%%% IDENTIFY POTENTIALLY BAD TRIALS BAND-PASS FILT %%%%%%%%%%%%%%
 
@@ -151,9 +177,13 @@ cfg_filt.padtype    = 'mirror';
 dat_filt = ft_preprocessing(cfg_filt, data_seg_temp);
 
 % step 3: calculate the variance for each trial
-EEG = cat(3, dat_filt.trial{:}); % chan x samples x trials
-trial_var = var(EEG, 0, [1 2]);
-trial_var = squeeze(trial_var)';
+nTrials   = numel(dat_filt.trial);
+nChans    = numel(dat_filt.label);         
+trial_var = nan(nTrials, nChans);
+for i = 1:nTrials
+    this_trial = dat_filt.trial{i};         % chan × time_i
+    trial_var(i, :) = var(this_trial, 0, 2);  % variance along time (dim 2), for each channel
+end
 
 % step 4: identify artifact trials using robust z-scores (exceeds z-thresh)
 median_val = median(trial_var);
@@ -162,7 +192,7 @@ if MAD_val == 0, MAD_val = eps; end
 z_pow = 0.6745 * (trial_var - median_val) / MAD_val;
 
 % Identify bad trials by having too much variance
-bad_trials2 = find(abs(z_pow) > zthresh);
+bad_trials2 = find(abs(z_pow) > zthresh)';
 
 % Update bad channel vector and keep only unique trials
 bad_trials = unique([bad_trials, bad_trials2]);
@@ -290,22 +320,35 @@ end
 % Remove safe bad trials from the ones about to get deleted
 if strcmp(savetrials, 'yes')
     bad_trials = setdiff(bad_trials, safe_bad_trials);
+    good_trials = setdiff(1:numel(data_seg_temp.trial), bad_trials);
 end
 
-% Segment the original data
-cfg_seg = [];
-cfg_seg.length  = seglength;   % segment (trial) length in seconds
-cfg_seg.overlap = 0;           % 0% overlap
-data_segmented = ft_redefinetrial(cfg_seg, data);
+% Segment the original (inputted) data if needed
+if strcmp(datatype, 'rseeg')
+    cfg_seg = [];
+    cfg_seg.length  = seglength;   % segment (trial) length in seconds
+    cfg_seg.overlap = 0;           % 0% overlap
+    data_segmented = ft_redefinetrial(cfg_seg, data);
+elseif strcmp(datatype, 'erp')
+    data_segmented = data;
+end
+
 
 % Create a structure with `.artfctdef` field to specify bad trials (with
 % sampleinfo)
-cfg_rej = [];
-cfg_rej.artfctdef.reject = 'complete';
-cfg_rej.artfctdef.bad.artifact = data_segmented.sampleinfo(bad_trials, :);
+%cfg_rej = [];
+%cfg_rej.artfctdef.reject = 'partial';
+%cfg_rej.artfctdef.bad.artifact = data_segmented.sampleinfo(bad_trials, :);
 
 % Remove the bad trials from the data
-data_rej = ft_rejectartifact(cfg_rej, data_segmented); 
+%data_rej = ft_rejectartifact(cfg_rej, data_segmented); 
+
+% We will instead keep good trials since this prevents errors with
+% overlapping segments
+cfg = [];
+cfg.trials = good_trials;
+data_rej = ft_selectdata(cfg, data_segmented);
+
 
 % print out how many trials were removed
 fprintf('Original trials: %d, After removal: %d\n', ...
@@ -433,6 +476,7 @@ if strcmp(intpmatrixupdt, 'yes')
     
     % Check to see if .intpmatrix already exists
     intpmatrix = data.cfg.preproc.intpmatrix;
+
     if isempty(intpmatrix)
         % segment the EEG data into trials
         intpmatrix = zeros(numel(data_rej.label), numel(data_rej.trial));

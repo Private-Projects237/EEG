@@ -1,17 +1,23 @@
 function [rmvchandata, bad_chans] = ft_removebadchann(cfg, data)
 % FT_REMOVEBADCHANN This function uses channel variance over median channel
-% variance ratios to identidy noisy channels. This includes, electrode
+% variance ratios to identify noisy channels. This includes, electrode
 % pops and flatlined channels. Additionally, it removes 'noisy' electrodes
 % that have high power in higher frequencies while accounting for muscle
 % artifacts in the data (does not clean muscle artifacts) by using robust
-% z-scores. Additionally, eye blinks can be detected and attenuated to
-% reduce inflated variances in frontal electrodes.
+% z-scores. Lastly, eye blinks can be detected and attenuated to
+% reduce inflated variances in frontal electrodes before identifying bad
+% channels, reducing the chance of blinks inflating the variance of frontal
+% channels. This function works for continuous and epoched data and will
+% return the same segmentation structure as inputed.
 %
 % INPUT
-%   data = EEG data in the FieldTrip format- preferrably continuous
+%   data = EEG data in the FieldTrip format (epoched or continuous)
 %
-% INPUT
-%   cfg.removebadchann.concatenate    = 'yes' (default); 
+% INPUT (Data Structure)
+%   cfg.removebadchann.datatype       = 'rseeg' or 'erp'
+%   cfg.removebadchann.seglength      = 2 (default); only applies to 'rseeg' will be ignored in 'erp'
+%
+% INPUT (Artifact Thresholds)
 %   cfg.removebadchann.mthresh1       = 5 (default):
 %   cfg.removebadchann.mthresh2       = 0.05 (default);
 %   cfg.removebadchann.zthresh        = 4 (default);
@@ -38,8 +44,13 @@ function [rmvchandata, bad_chans] = ft_removebadchann(cfg, data)
 %   cfg.saveplots.plotfolder   =  []; A pathway that PNGs will be saved within
 %
 % OUTPUT
-%   [data_rmv_chans, bad_chan_label]
+%   [data_rmv_chans, bad_chan_label]; Returned data will have same data
+%   structure (epoched or not) as input data, minus the number of rows
+%   (channels) that were removed.
 %   
+
+% Creating a vector of allowed datatypes
+allowed_datatypes = {'rseeg', 'erp'};
 
 % Save the original configuration
 cfg_org = cfg; 
@@ -49,7 +60,9 @@ cfg = ft_checkconfig(cfg, 'required', {'removebadchann'});
 
 % Set up configuration defaults
 cfg.removebadchann = ft_getopt(cfg, 'removebadchann', struct());
-concatenate        = ft_getopt(cfg.removebadchann, 'concatenate', 'yes');
+datatype           = ft_getopt(cfg.removebadchann, 'datatype', []);
+seglength          = ft_getopt(cfg.removebadchann, 'seglength', 2);
+
 mthresh1           = ft_getopt(cfg.removebadchann, 'mthresh1', 5);
 mthresh2           = ft_getopt(cfg.removebadchann, 'mthresh2', 0.05);
 zthresh            = ft_getopt(cfg.removebadchann, 'zthresh', 4);
@@ -89,16 +102,13 @@ if strcmp(peakprotection, 'yes') && isempty(blinkchans)
     error('Error: Must specify .blinkchans for peakprotection')
 end
 
+if ~any(strcmp(datatype, allowed_datatypes))
+    error('cfg.removebadchann.datatype must be one of: ''rseeg'' or ''erp''. Got: ''%s''.', datatype);
+end
+
+
 % Create a temporary variable
 dat = data;
-
-% Concatenate the data if they are trials (and specified as 'yes')
-if strcmp(concatenate, 'yes')
-    cfg_con = [];
-    cfg_con.continuous = 'yes'; 
-    dat = ft_redefinetrial(cfg_con, data);
-    fprintf('EEG data was concatenated succesfully\n');
-end
 
 % Additional variables to keep track of
 temp_rmvtrials = 0;
@@ -106,11 +116,17 @@ temp_rmvtrials = 0;
 % If muscle protection was specified as yes
 if strcmp(muscleprotection, 'yes')
 
-    % step 1: segment the EEG data into trials
-    cfg_seg = [];
-    cfg_seg.length  = 2;        % segment length in seconds
-    cfg_seg.overlap = 0;        % 0 for non-overlapping (100% = fully overlapping)
-    dat_seg = ft_redefinetrial(cfg_seg, dat);
+    % if continuous rseeg data, segment it to identify muscle contaminated trials
+    if strcmp(datatype, 'rseeg')
+        % step 1: segment the EEG data into trials
+        cfg_seg = [];
+        cfg_seg.length  = seglength;        % segment length in seconds
+        cfg_seg.overlap = 0;        % 0 for non-overlapping (100% = fully overlapping)
+        dat_seg = ft_redefinetrial(cfg_seg, dat);
+    elseif strcmp(datatype, 'erp')
+        % step1: data is already segmented
+        dat_seg = dat;
+    end
 
     % step 2: band-pass filter high frequency information
     cfg_filt = [];
@@ -121,10 +137,14 @@ if strcmp(muscleprotection, 'yes')
     cfg_filt.padtype    = 'mirror';   
     dat_filt = ft_preprocessing(cfg_filt, dat_seg);
 
-    % step 3: calculate the variance for each trial
-    EEG = cat(3, dat_filt.trial{:}); % chan x samples x trials
-    trial_var = var(EEG, 0, [1 2]);
-    trial_var = squeeze(trial_var)';
+    % step 3: calculate the variance for each trial (Robust to segment differences)
+    nTrials   = numel(dat_filt.trial);
+    nChans    = numel(dat_filt.label);         
+    trial_var = nan(nTrials, nChans);          
+    for i = 1:nTrials
+        this_trial = dat_filt.trial{i};         % chan × time_i
+        trial_var(i, :) = var(this_trial, 0, 2);  % variance along time (dim 2), for each channel
+    end
 
     % step 4: identify artifact trials using robust z-scores (exceeds z-thresh)
     median_val = median(trial_var);
@@ -133,15 +153,18 @@ if strcmp(muscleprotection, 'yes')
     z_pow = 0.6745 * (trial_var - median_val) / MAD_val;
     bad_trials = find(z_pow > zthresh);
 
+    % step 5: create a copy version of segmented data (for deletion)
+    dat_seg_delete = dat_seg;
+
     % step 5: delete bad trials from the data (update all other fields)
-    dat_seg.trial(bad_trials)       = [];
-    dat_seg.time(bad_trials)        = [];
-    dat_seg.sampleinfo(bad_trials,:) = [];
+    dat_seg_delete.trial(bad_trials)       = [];
+    dat_seg_delete.time(bad_trials)        = [];
+    dat_seg_delete.sampleinfo(bad_trials,:) = [];
 
     % step 6: save this information back into 'dat'
     cfg_cont = [];
     cfg_cont.continuous = 'yes';
-    dat = ft_redefinetrial(cfg_cont, dat_seg);
+    dat = ft_redefinetrial(cfg_cont, dat_seg_delete);
     temp_rmvtrials = length(bad_trials);
    
 end
@@ -359,11 +382,11 @@ end
 
 
 
-% Return the bad channel labels and remove them from the data
+% Return the bad channel labels and remove them from the original data
 if ~isempty(bad_chans_idx)
     bad_chans = data.label(bad_chans_idx);  
     cfg_rmvchan = [];
-    cfg_rmvchan.channel = setdiff(data.label, bad_chans);  % keeps 29 good channels
+    cfg_rmvchan.channel = setdiff(data.label, bad_chans);  % keeps good channels
     cfg_rmvchan.export = 'no';
     
     % Delete the noisy channels from the data
@@ -408,12 +431,10 @@ if strcmp(intpmatrixupdt, 'yes')
     
     % Check to see if .intpmatrix already exists
     intpmatrix = data.cfg.preproc.intpmatrix;
+
+    % If does not exist- create one using segmented data (works for both rseeg and erp)
     if isempty(intpmatrix)
-        % segment the EEG data into trials
-        cfg_seg = [];
-        cfg_seg.length  = 2;        % segment length in seconds
-        cfg_seg.overlap = 0;        % 0 for non-overlapping (100% = fully overlapping)
-        dat_seg = ft_redefinetrial(cfg_seg, data);
+        % Create a matrix to represt the epoched data
         intpmatrix = zeros(numel(dat_seg.label), numel(dat_seg.trial));
         rmvchandata.cfg.preproc.labels = dat_seg.label;
     end

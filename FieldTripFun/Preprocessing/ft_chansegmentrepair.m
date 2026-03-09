@@ -6,10 +6,23 @@ function data_segrepaired = ft_chansegmentrepair(cfg, data)
 % brain or not  and then calculate robust z-scores in the time domain to 
 % identify bad channels x trials to interpolate. 
 %
-% WARNING: Data should already be segmented (contain trials)
+% UPDATE 
+%   Data will need to be segmented. So either input segmented data
+%   (for erp and rseeg), or specify segmenting continuous rsEEG data. 
+%
+%   Initially we used the `ft_rejectartifact()` to remove bad segments, but
+%   that caused problems when epoches overlapped. To circumvent this, we
+%   are now using `ft_selectdata()` to keep good trials instead.
+% 
+%   Unfortunately, plots do not work well with ERP data- too squished!
 %
 % Usage:
 %   data_fixed = ft_chansegmentrepair(cfg, data)
+%
+% INPUT (Data Structure)
+%   cfg.chansegmentrepair.datatype       = 'rseeg' or 'erp'
+%   cfg.chansegmentrepair.segment        = 'no' (default); if you want to segment rseeg data (does not work for erp)
+%   cfg.chansegmentrepair.seglength      = 2 (default); only applies to 'rseeg' will be ignored in 'erp'
 %
 % INPUT
 %   cfg.chansegmentrepair.zthresh1        = 5 (default); Robust z-score threshold for general data
@@ -49,6 +62,9 @@ function data_segrepaired = ft_chansegmentrepair(cfg, data)
 %
 %   See also FT_CHANNELREPAIR, FT_REDEFINETRIAL, FT_PREPARE_NEIGHBOURS
 
+% Creating a vector of allowed datatypes
+allowed_datatypes = {'rseeg', 'erp'};
+
 % Save the original configuration
 cfg_org = cfg; 
 
@@ -65,6 +81,10 @@ neighbours   = cfg.chansegmentrepair.neighbours;
 
 % Set up configuration defaults
 cfg.chansegmentrepair = ft_getopt(cfg, 'chansegmentrepair', struct());
+datatype           = ft_getopt(cfg.chansegmentrepair, 'datatype', []);
+segment            = ft_getopt(cfg.chansegmentrepair, 'segment', 'no');
+seglength          = ft_getopt(cfg.chansegmentrepair, 'seglength', 2);
+
 zthresh1       = ft_getopt(cfg.chansegmentrepair, 'zthresh1', 5);
 zthresh2       = ft_getopt(cfg.chansegmentrepair, 'zthresh2', 5);
 regfrqbp       = ft_getopt(cfg.chansegmentrepair, 'regfrqbp', [30 140]);
@@ -107,6 +127,12 @@ if ~isfield(data, 'elec')
     ft_error('data.elec is required - run ft_read_sens() first;');
 end
 
+% Error management
+if ~any(strcmp(datatype, allowed_datatypes))
+    error('cfg.chansegmentrepair.datatype must be one of: ''rseeg'' or ''erp''. Got: ''%s''.', datatype);
+end
+
+
 % Best for eyes open conditions
 if strcmp(peakprotection, 'yes')
 
@@ -140,12 +166,25 @@ end
 
 %%%%%%%%%%%%% CALCULATING REGULAR CHANN x TRIAL VARIANCE (ALL OR WITHIN) %%%%%%%%%%%%%%
 
+% Segment data if specified
+if strcmp(datatype, 'rseeg') && strcmp(segment, 'yes') 
+    cfg_seg = [];
+    cfg_seg.length  = seglength; % segment (trial) length in seconds
+    cfg_seg.overlap = 0;         % 0% overlap
+    data_seg_temp = ft_redefinetrial(cfg_seg, temp_dat);
+elseif strcmp(datatype, 'erp')
+    data_seg_temp = temp_dat;
+else 
+    data_seg_temp = temp_dat;
+end
+
+
 % Create a structure to calculate robust-zscores
 cfg_rz = [];
 cfg_rz.robustzmatrix.segmentdat   = 'no' ;
 cfg_rz.robustzmatrix.segseclength = [];
 cfg_rz.robustzmatrix.type = type;
-robust_z1 = ft_robustzmatrix(cfg_rz, temp_dat);
+robust_z1 = ft_robustzmatrix(cfg_rz, data_seg_temp);
 
 %%%%%%%%% CALCULATING HIGH PASS FILT CHANN X TRIAL VARIANCE (ALL OR WITHIN) %%%%%%%%%%%
 
@@ -156,7 +195,7 @@ cfg_filt.bpfreq     = regfrqbp;
 cfg_filt.bpfiltord  = 4;          
 cfg_filt.padding    = 2;           
 cfg_filt.padtype    = 'mirror';   
-dat_filt = ft_preprocessing(cfg_filt, temp_dat);
+dat_filt = ft_preprocessing(cfg_filt, data_seg_temp);
 
 % Create a structure to calculate robust-zscores
 cfg_rz = [];
@@ -247,6 +286,7 @@ if strcmp(intmatrixplot, 'yes')
     title(sprintf('Interpolated channels per trial (General + Band-Pass Filt: %g-%g Hz)', regfrqbp(1), regfrqbp(2)));
     set(gca, 'YTick', 1:numel(data.label), 'YTickLabel', data.label, 'FontSize', 9);
 
+
     % If plots are to be saved then save them
     if strcmp(saveplots, 'yes')
         cfg_sp = [];
@@ -294,15 +334,23 @@ if strcmp(indvbadsegplot, 'yes') && strcmp(rmvtrials, 'yes')
 end
 
 % Marking segments for deletion if specified
-if strcmp(rmvtrials, 'yes') && numel(data.trial) ~= length(bad_trials)
+if strcmp(rmvtrials, 'yes') && numel(data_seg_temp.trial) ~= length(bad_trials)
 
     % Delete the bad segments
-    cfg_rej = [];
-    cfg_rej.artfctdef.reject = 'complete';
-    cfg_rej.artfctdef.bad.artifact = data.sampleinfo(bad_trials, :);
+    %cfg_rej = [];
+    %cfg_rej.artfctdef.reject = 'complete';
+    %cfg_rej.artfctdef.bad.artifact = data.sampleinfo(bad_trials, :);
     
     % Remove the bad trials from the data
-    data = ft_rejectartifact(cfg_rej, data); 
+    %data = ft_rejectartifact(cfg_rej, data); 
+
+    % Obtain the good trials
+    good_trials = setdiff(1:numel(data_seg_temp.trial), bad_trials);
+
+    % Select only the good trials
+    cfg = [];
+    cfg.trials = good_trials;
+    data = ft_selectdata(cfg, data_seg_temp);
 
     % Update matrix by deleting columns that represented bad trials
     bad_chan_trial(:,bad_trials) = [];
@@ -483,6 +531,7 @@ if strcmp(intpmatrixupdt, 'yes')
     
     % Check to see if .intpmatrix already exists
     intpmatrix = data_segrepaired.cfg.preproc.intpmatrix; % Keep as data_segrepaited not data
+    
     if isempty(intpmatrix)
         % segment the EEG data into trials
         intpmatrix = zeros(numel(data_segrepaired.label), numel(data_segrepaired.trial));

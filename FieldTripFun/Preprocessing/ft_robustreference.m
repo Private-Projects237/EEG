@@ -4,8 +4,18 @@ function [data_referenced, mn]= ft_robustreference(cfg, data)
 % means that rereferencing occurs without including noise in channels into
 % the average. This is done by weighting data samples that are noise to 0.
 %
+% UPDATE
+%   Using `ft_convXtoFT()` to convert rereferenced data matrix into a
+%   FieldTrip data object plus `ft_resegmentdata()` custom function to
+%   convert continuous data back into original segment structure as
+%   data input.
+%
 % Usage:
 %   data_referenced = ft_robustreference(cfg, data)
+%
+% INPUT (Data Structure)
+%   cfg.removebadchann.datatype       = 'rseeg' or 'erp'; This is for the
+%       ft_resegmentdata() function in this script.
 %
 % INPUT:
 %   cfg.robustreference.thresh      = 3 (default); SD threshold to turn the
@@ -28,6 +38,9 @@ function [data_referenced, mn]= ft_robustreference(cfg, data)
 %   data_referenced = robust referenced data
 %   mn = a vector containing the subtracted referece
 
+% Creating a vector of allowed datatypes
+allowed_datatypes = {'rseeg', 'erp'};
+
 % Save the original configuration
 cfg_org = cfg; 
 
@@ -36,6 +49,7 @@ cfg = ft_checkconfig(cfg, 'required', {'robustreference'});
 
 % Set up configuration defaults
 cfg.robustreference = ft_getopt(cfg, 'robustreference', struct());
+datatype    = ft_getopt(cfg.robustreference, 'datatype', []);
 thresh      = ft_getopt(cfg.robustreference, 'thresh', 3);
 heatmap     = ft_getopt(cfg.robustreference, 'heatmap', 'no');
 padding     = ft_getopt(cfg.robustreference, 'padding', 100);
@@ -60,6 +74,11 @@ if strcmp(visibleplots, 'yes'); Show = 'on'; else; Show = 'off'; end
 
 % Validate input data
 data = ft_checkconfig(data, 'required', {'label', 'trial', 'time', 'fsample', 'sampleinfo'});
+
+% Error management
+if ~any(strcmp(datatype, allowed_datatypes))
+    error('cfg.removebadchann.datatype must be one of: ''rseeg'' or ''erp''. Got: ''%s''.', datatype);
+end
 
 % Concatenate all trials into one object
 X = cat(2, data.trial{:});
@@ -110,27 +129,23 @@ x_t = X'; w_t = w_padded';
 % Change it back into channels x sample
 x_reference = y';
 
-% Convert this information back into trials
-trial_samples = size(data.trial{1},2);
-nTrials = size(x_reference,2) / trial_samples;
+% Convert the matrix into a FieldTrip data structure
+data_concat = ft_convXtoFT(x_reference, data.fsample);
 
-% Set variables to hold loop information
-trials = {};
-start_samp = 1;
-end_samp = trial_samples;
+% Convert the continuous information back into original epoched structure
+cfg = [];
+cfg.datatype = datatype; % Mention 'rseeg' or 'erp'
+cfg.epoched_ref = data; % original data
+cfg.continuous = data_concat; % rereferenced continuous data
+cfg.restore_time = true;  % Keep original time vectors
+data_referenced = ft_resegmentdata(cfg); % segmented rereferenced data
 
-% Create a for loop that segments the data by save size as inputed data
-for ii = 1:nTrials
-    trials{ii} = x_reference(:,start_samp:end_samp);
-    start_samp = start_samp + trial_samples;
-    end_samp = end_samp + trial_samples; 
-end
+% Update fields to the new dataset
+data_referenced.label = data.label;
+data_referenced.cfg = data.cfg;
+data_referenced.fsample = data.fsample;
+data_referenced.hdr = data.hdr;
 
-% Create a copy of the data
-data_referenced = data;
-
-% Replace the original trials with the referenced ones
-data_referenced.trial = trials;
 
 % If a plot was specified 
 if strcmp(channelplot, 'yes')
