@@ -145,7 +145,7 @@ end
 
 % Create figure and tiled layout
 fig = figure('Visible', Show, 'Position', [100, 100, cfg.figsize(1), cfg.figsize(2)], 'Color', 'white');
-t = tiledlayout(cfg.layout(1), cfg.layout(2), 'TileSpacing', 'compact', 'Padding', 'tight');
+t = tiledlayout(cfg.layout(1), cfg.layout(2), 'TileSpacing', 'compact', 'Padding', 'compact');
 
 % Add main title
 title(t, 'Average Power Spectra Across Channels', 'FontSize', cfg.titlefontsize, 'FontWeight', 'bold');
